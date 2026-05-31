@@ -1,0 +1,26 @@
+# Prometheus scrape config for postgres_exporter (one per PG node)
+# Optional bonus — not required by the default lab build.
+
+scrape_configs:
+  - job_name: 'postgres'
+    static_configs:
+      - targets:
+          - 'pg1.lab.test:9187'
+          - 'pg2.lab.test:9187'
+          - 'pg3.lab.test:9187'
+        labels:
+          cluster: 'pg-ha-lab'
+
+  - job_name: 'patroni'
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'pg1.lab.test:8008'
+          - 'pg2.lab.test:8008'
+          - 'pg3.lab.test:8008'
+        labels:
+          cluster: 'pg-ha-lab'
+
+  - job_name: 'haproxy'
+    static_configs:
+      - targets: [ 'lb.lab.test:7000' ]

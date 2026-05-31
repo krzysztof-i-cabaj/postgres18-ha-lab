@@ -1,0 +1,8 @@
+# chrony.conf — lab client (NTP client of infra)
+server @@INFRA_IP@@ iburst prefer
+
+makestep 1.0 3
+rtcsync
+
+driftfile /var/lib/chrony/drift
+logdir /var/log/chrony

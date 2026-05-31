@@ -1,0 +1,15 @@
+# chrony.conf — infra (NTP server for lab clients)
+pool pool.ntp.org iburst maxsources 4
+pool 0.rocky.pool.ntp.org iburst
+
+# Allow lab clients
+allow 192.168.56.0/24
+
+# Local stratum if internet is unavailable
+local stratum 10
+
+driftfile /var/lib/chrony/drift
+makestep 1.0 3
+rtcsync
+
+logdir /var/log/chrony

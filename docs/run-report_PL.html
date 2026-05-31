@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PostgreSQL 18 HA Lab &mdash; Scenario Run Report</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --fg:#c9d1d9; --muted:#8b949e; --grn:#3fb950;
+          --red:#f85149; --ylw:#d29922; --blu:#58a6ff; --vio:#bc8cff; --bord:#30363d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.55; }
+  .wrap { max-width:1080px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:2rem; margin:.2em 0; }
+  h2 { border-bottom:1px solid var(--bord); padding-bottom:.3em; margin-top:2em; }
+  .badges span { display:inline-block; margin:2px 4px 2px 0; }
+  .badge { background:var(--panel); border:1px solid var(--bord); border-radius:6px;
+           padding:3px 10px; font-size:.8rem; color:var(--muted); }
+  .badge.ok { color:var(--grn); border-color:var(--grn); }
+  .badge.bad { color:var(--red); border-color:var(--red); }
+  .goal { background:var(--panel); border-left:4px solid var(--blu); padding:14px 18px;
+          border-radius:6px; margin:18px 0; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:.92rem; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--bord); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  td.num { color:var(--vio); font-weight:700; white-space:nowrap; }
+  td.scn { color:var(--blu); font-family:monospace; white-space:nowrap; }
+  td.ok { color:var(--grn); white-space:nowrap; }
+  td.bad { color:var(--red); white-space:nowrap; font-weight:700; }
+  .metrics td.k { color:var(--muted); } .metrics td.v { color:var(--fg); font-weight:600; }
+  .bar { background:#010409; border:1px solid var(--bord); border-radius:6px; height:26px;
+         position:relative; margin:10px 0; overflow:hidden; }
+  .bar .gap { background:linear-gradient(90deg,var(--red),var(--ylw)); height:100%; }
+  .bar .lbl { position:absolute; top:0; left:8px; line-height:26px; font-size:.8rem; color:var(--fg); }
+  details { background:var(--panel); border:1px solid var(--bord); border-radius:8px;
+            margin:10px 0; padding:0 14px; }
+  details[open] { padding-bottom:10px; }
+  summary { cursor:pointer; padding:12px 0; font-weight:600; }
+  summary .ok { color:var(--grn); } summary .bad { color:var(--red); }
+  pre.term { background:#010409; border:1px solid var(--bord); border-radius:8px; padding:16px;
+             overflow-x:auto; font-family:Consolas,Menlo,monospace; font-size:.82rem;
+             line-height:1.45; white-space:pre; }
+  pre.term span { display:block; }
+  .pass { color:var(--grn); } .fail { color:var(--red); font-weight:700; }
+  .info { color:var(--ylw); } .cmd { color:var(--blu); }
+  footer { margin-top:50px; color:var(--muted); font-size:.85rem;
+           border-top:1px solid var(--bord); padding-top:18px; }
+  a { color:var(--blu); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>&#129514; PostgreSQL 18 HA Lab &mdash; Raport przebiegu scenariuszy</h1>
+  <div class="badges">
+    <span class="badge ok">&#10003; 12/12 PASS</span>
+    <span class="badge">2026-05-31</span>
+    <span class="badge">Patroni + etcd + HAProxy + PgBouncer</span>
+    <span class="badge">driver: pgha-client</span>
+  </div>
+  <div class="goal"><strong>Co to jest?</strong> Automatyczny raport przebiegu scenariuszy awarii HA &mdash; tabela wynik&oacute;w, metryki failoveru z perspektywy aplikacji (<code>pgha-client</code>) oraz rozwijane transcripty (komenda + output) ka&#380;dego scenariusza.</div>
+  <h2>&#128202; Wyniki</h2>
+  <table><thead><tr><th>#</th><th>Scenariusz</th><th>Wynik</th><th>Kluczowa obserwacja</th></tr></thead><tbody>
+    <tr><td class="num">01</td><td class="scn">baseline</td><td class="ok">&#10003; PASS</td><td>leader is pg2</td></tr>
+    <tr><td class="num">02</td><td class="scn">kill-primary-hard</td><td class="ok">&#10003; PASS</td><td>leader changed: pg2 -&gt; pg1</td></tr>
+    <tr><td class="num">04</td><td class="scn">graceful-switchover</td><td class="ok">&#10003; PASS</td><td>leader changed: pg3 -&gt; pg2</td></tr>
+    <tr><td class="num">05</td><td class="scn">network-partition</td><td class="ok">&#10003; PASS</td><td>leader changed: pg1 -&gt; pg3</td></tr>
+    <tr><td class="num">06</td><td class="scn">etcd-single-loss</td><td class="ok">&#10003; PASS</td><td>leader is pg3</td></tr>
+    <tr><td class="num">07</td><td class="scn">etcd-quorum-loss</td><td class="ok">&#10003; PASS</td><td>read through HAProxy ok (rows=18)</td></tr>
+    <tr><td class="num">08</td><td class="scn">replica-restart</td><td class="ok">&#10003; PASS</td><td>leader is pg3</td></tr>
+    <tr><td class="num">09</td><td class="scn">pg-rewind-old-primary</td><td class="ok">&#10003; PASS</td><td>old primary pg3 rejoined as replica (pg_rewind likely succeeded)</td></tr>
+    <tr><td class="num">10</td><td class="scn">sync-vs-async</td><td class="ok">&#10003; PASS</td><td>write through HAProxy ok (id=174)</td></tr>
+    <tr><td class="num">11</td><td class="scn">multi-host-libpq</td><td class="ok">&#10003; PASS</td><td>multi-host libpq routed to: 192.168.56.13</td></tr>
+    <tr><td class="num">12</td><td class="scn">cascading-failure</td><td class="ok">&#10003; PASS</td><td>leader changed: pg2 -&gt; pg1</td></tr>
+    <tr><td class="num">13</td><td class="scn">app-failover-continuous</td><td class="ok">&#10003; PASS</td><td>leader changed: pg3 -&gt; pg1</td></tr>
+  </tbody></table>
+  <h2>&#128013; Failover sterowany aplikacj&#261;</h2>
+  <p>Leader: <code>pg3</code> &rarr; <code>pg1</code></p>
+  <div class="bar"><div class="gap" style="width:3.4%"></div><span class="lbl">okno niedost&#281;pno&#347;ci: 2.1s z 60s (1 outage, 1 reconnect)</span></div>
+  <table class="metrics"><tbody>
+    <tr><td class="k">writer inserts</td><td class="v">580</td></tr>
+    <tr><td class="k">outages</td><td class="v">1</td></tr>
+    <tr><td class="k">reconnects</td><td class="v">1</td></tr>
+    <tr><td class="k">max downtime (s)</td><td class="v">2.06</td></tr>
+    <tr><td class="k">total downtime (s)</td><td class="v">2.06</td></tr>
+    <tr><td class="k">writer actual Hz</td><td class="v">9.67</td></tr>
+    <tr><td class="k">reader selects</td><td class="v">580</td></tr>
+    <tr><td class="k">reader max_id</td><td class="v">894 -&gt; 1488</td></tr>
+  </tbody></table>
+  <h2>&#128220; Transcripty</h2>
+  <details><summary>01 &mdash; <code>baseline</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS leader is pg2</span>
+<span class="pass">PASS etcd quorum healthy (3/3 nodes)</span>
+<span class="pass">PASS 3 members visible</span>
+<span class="pass">PASS write through HAProxy ok (id=306)</span>
+<span class="pass">PASS read through HAProxy ok (rows=26)</span>
+    </pre>
+  </details>
+  <details><summary>02 &mdash; <code>kill-primary-hard</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="info">INFO previous leader: pg2, sentinel id=209</span>
+<span class="info">INFO waiting up to 60s for new leader</span>
+<span class="pass">PASS leader changed: pg2 -&gt; pg1</span>
+<span class="pass">PASS read through HAProxy ok (rows=23)</span>
+<span class="pass">PASS write through HAProxy ok (id=241)</span>
+<span class="pass">PASS committed row 209 survived failover (no data loss)</span>
+    </pre>
+  </details>
+  <details><summary>04 &mdash; <code>graceful-switchover</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="info">INFO switchover pg3 -&gt; pg2</span>
+<span>Current cluster topology</span>
+<span>+ Cluster: pg-ha-lab (7645648652996586224) ---------+----+-------------+-----+------------+-----+</span>
+<span>| Member | Host          | Role         | State     | TL | Receive LSN | Lag | Replay LSN | Lag |</span>
+<span>+--------+---------------+--------------+-----------+----+-------------+-----+------------+-----+</span>
+<span>| pg1    | 192.168.56.11 | Replica      | streaming | 14 |   0/A000C60 |   0 |  0/A000C60 |   0 |</span>
+<span>| pg2    | 192.168.56.12 | Sync Standby | streaming | 14 |   0/A000C60 |   0 |  0/A000C60 |   0 |</span>
+<span>| pg3    | 192.168.56.13 | Leader       | running   | 14 |             |     |            |     |</span>
+<span>+--------+---------------+--------------+-----------+----+-------------+-----+------------+-----+</span>
+<span>2026-05-30 17:50:22.27049 Successfully switched over to &quot;pg2&quot;</span>
+<span>+ Cluster: pg-ha-lab (7645648652996586224) --+----+-------------+-----+------------+-----+</span>
+<span>| Member | Host          | Role    | State   | TL | Receive LSN | Lag | Replay LSN | Lag |</span>
+<span>+--------+---------------+---------+---------+----+-------------+-----+------------+-----+</span>
+<span>| pg1    | 192.168.56.11 | Replica | running | 14 |   0/B0000A0 |   0 |  0/B0000A0 |   0 |</span>
+<span>| pg2    | 192.168.56.12 | Leader  | running | 14 |             |     |            |     |</span>
+<span>| pg3    | 192.168.56.13 | Replica | stopped |    |     unknown |     |    unknown |     |</span>
+<span>+--------+---------------+---------+---------+----+-------------+-----+------------+-----+</span>
+<span class="pass">PASS leader changed: pg3 -&gt; pg2</span>
+<span class="pass">PASS write through HAProxy ok (id=208)</span>
+    </pre>
+  </details>
+  <details><summary>05 &mdash; <code>network-partition</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="info">INFO partitioning pg1 (self-healing after ~75s)</span>
+<span class="pass">PASS leader changed: pg1 -&gt; pg3</span>
+<span class="info">INFO partition self-heals in ~75s; old leader rejoins as replica</span>
+    </pre>
+  </details>
+  <details><summary>06 &mdash; <code>etcd-single-loss</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS leader is pg3</span>
+<span class="pass">PASS write through HAProxy ok (id=173)</span>
+    </pre>
+  </details>
+  <details><summary>07 &mdash; <code>etcd-quorum-loss</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS read through HAProxy ok (rows=18)</span>
+<span class="pass">PASS etcd quorum healthy (3/3 nodes)</span>
+    </pre>
+  </details>
+  <details><summary>08 &mdash; <code>replica-restart</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS leader is pg3</span>
+<span class="pass">PASS 3 members visible</span>
+<span class="pass">PASS leader unchanged</span>
+    </pre>
+  </details>
+  <details><summary>09 &mdash; <code>pg-rewind-old-primary</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS old primary pg3 rejoined as replica (pg_rewind likely succeeded)</span>
+    </pre>
+  </details>
+  <details><summary>10 &mdash; <code>sync-vs-async</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="info">INFO current synchronous_mode at pg3:</span>
+<span>synchronous_mode: true</span>
+<span>synchronous_mode_strict: false</span>
+<span class="info">INFO switching to async (synchronous_mode=false), then back</span>
+<span>---</span>
+<span>+++</span>
+<span>@@ -16,7 +16,7 @@</span>
+<span>   use_pg_rewind: true</span>
+<span>   use_slots: true</span>
+<span> retry_timeout: 10</span>
+<span>-synchronous_mode: true</span>
+<span>+synchronous_mode: false</span>
+<span> synchronous_mode_strict: false</span>
+<span> synchronous_node_count: 1</span>
+<span> ttl: 30</span>
+<span>Configuration changed</span>
+<span class="pass">PASS write through HAProxy ok (id=174)</span>
+<span>---</span>
+<span>+++</span>
+<span>@@ -16,7 +16,7 @@</span>
+<span>   use_pg_rewind: true</span>
+<span>   use_slots: true</span>
+<span> retry_timeout: 10</span>
+<span>-synchronous_mode: false</span>
+<span>+synchronous_mode: true</span>
+<span> synchronous_mode_strict: false</span>
+<span> synchronous_node_count: 1</span>
+<span> ttl: 30</span>
+<span>Configuration changed</span>
+    </pre>
+  </details>
+  <details><summary>11 &mdash; <code>multi-host-libpq</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS multi-host libpq routed to: 192.168.56.13</span>
+    </pre>
+  </details>
+  <details><summary>12 &mdash; <code>cascading-failure</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="pass">PASS leader changed: pg2 -&gt; pg1</span>
+<span class="pass">PASS leader changed: pg1 -&gt; pg3</span>
+<span class="pass">PASS 3 members visible</span>
+    </pre>
+  </details>
+  <details><summary>13 &mdash; <code>app-failover-continuous</code> &nbsp; <span class="ok">&#10003; PASS</span></summary>
+    <pre class="term">
+<span class="info">INFO previous leader: pg3, base id=893, load 10Hz/60s</span>
+<span class="info">INFO writer pid=3256, reader pid=3257 -- rozbieg 8s przed awaria</span>
+<span>[11:16:47] reader target=direct rate=10.0 Hz                        reader.py:50</span>
+<span>[11:16:47] writer target=haproxy rate=10.0 Hz                       writer.py:55</span>
+<span>[11:16:52]   50 selects in 4.9s max_id=942 (0 reconnects, 0.0s      reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:16:52]   50 inserts in 4.9s (10.2 actual Hz, 0 reconnects, 0.0s writer.py:81</span>
+<span>           downtime)</span>
+<span class="info">INFO killing leader pg3 (pkill -9 postgres + systemctl stop patroni)</span>
+<span>[11:16:55] writer reconnect after error: consuming input failed:    writer.py:94</span>
+<span>           server closed the connection unexpectedly</span>
+<span>                   This probably means the server terminated</span>
+<span>           abnormally</span>
+<span>                   before or while processing the request.</span>
+<span>[11:16:55] reader reconnect after error: terminating connection due reader.py:84</span>
+<span>           to unexpected postmaster exit</span>
+<span class="info">INFO waiting up to 60s for new leader</span>
+<span class="pass">PASS leader changed: pg3 -&gt; pg1</span>
+<span>[11:16:59]   100 selects in 11.9s max_id=1007 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:16:59]   100 inserts in 11.9s (8.4 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:04]   150 selects in 16.9s max_id=1057 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:04]   150 inserts in 16.9s (8.9 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span class="info">INFO waiting for background load to finish (writer/reader)</span>
+<span>[11:17:09]   200 selects in 21.9s max_id=1108 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:09]   200 inserts in 21.9s (9.1 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:14]   250 selects in 26.9s max_id=1158 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:14]   250 inserts in 26.9s (9.3 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:19]   300 selects in 31.9s max_id=1208 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:19]   300 inserts in 31.9s (9.4 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:24]   350 selects in 36.9s max_id=1258 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:24]   350 inserts in 36.9s (9.5 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:29]   400 selects in 41.9s max_id=1308 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:29]   400 inserts in 41.9s (9.5 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:34]   450 selects in 46.9s max_id=1358 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:34]   450 inserts in 46.9s (9.6 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:39]   500 selects in 51.9s max_id=1408 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:39]   500 inserts in 51.9s (9.6 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:44]   550 selects in 56.9s max_id=1458 (1 reconnects, 2.1s   reader.py:71</span>
+<span>           downtime)</span>
+<span>[11:17:44]   550 inserts in 56.9s (9.7 actual Hz, 1 reconnects,     writer.py:81</span>
+<span>           2.1s downtime)</span>
+<span>[11:17:47] reader done selects=580 max_id=1488 outages=1           reader.py:101</span>
+<span>           reconnects=1 downtime=2.1s</span>
+<span>[11:17:47] writer done inserts=580 outages=1 reconnects=1          writer.py:110</span>
+<span>           downtime=2.1s</span>
+<span class="pass">PASS app kept writing across failover (inserts=580, outages=1)</span>
+<span class="pass">PASS max downtime 2.06s within budget (&lt;= 45s)</span>
+<span class="pass">PASS reads progressed (max_id 894 -&gt; 1488)</span>
+<span class="pass">PASS writes served by 2 distinct hosts since id=893 (&gt;= 2, primary moved)</span>
+<span class="pass">PASS read through HAProxy ok (rows=1162)</span>
+<span class="pass">PASS write through HAProxy ok (id=1490)</span>
+    </pre>
+  </details>
+  <footer>Wygenerowano: 2026-05-31 11:18:26 &mdash; <code>report/gen_report.py</code></footer>
+</div>
+</body>
+</html>

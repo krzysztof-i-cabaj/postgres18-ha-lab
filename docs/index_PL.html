@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PostgreSQL 18 HA Lab — Patroni · etcd · HAProxy na Windows 11</title>
+<meta name="description" content="Reprodukowalne laboratorium wysokiej dostępności PostgreSQL 18: Patroni + etcd + HAProxy + PgBouncer na 6 maszynach Rocky Linux, sterowane z Windows 11, z 13 scenariuszami awarii (13/13 PASS).">
+<style>
+  :root{
+    --bg:#f7f9fc; --card:#ffffff; --ink:#16202e; --muted:#5b6b7f; --line:#e6ebf2;
+    --pg:#336791; --accent:#1f6f8b; --grn:#16a34a; --amber:#d97706; --red:#dc2626; --vio:#7c3aed;
+    --shadow:0 1px 2px rgba(16,32,46,.06),0 8px 24px rgba(16,32,46,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--pg);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  code,kbd{font-family:"SFMono-Regular",Consolas,Menlo,monospace;font-size:.9em}
+
+  nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);
+    backdrop-filter:saturate(180%) blur(10px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;gap:18px;height:60px}
+  nav .brand{font-weight:800;letter-spacing:-.2px;color:var(--ink);white-space:nowrap}
+  nav .brand .dot{color:var(--pg)}
+  nav .links{display:flex;gap:18px;margin-left:auto;flex-wrap:wrap}
+  nav .links a{color:var(--muted);font-size:.92rem;font-weight:600}
+  nav .links a.active,nav .links a:hover{color:var(--pg);text-decoration:none}
+  nav .lang{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:.82rem;font-weight:700;color:var(--muted)}
+  nav .gh{font-size:.85rem;font-weight:700}
+  @media(max-width:860px){nav .links{display:none}}
+
+  .hero{background:linear-gradient(135deg,#22506e 0%,#1f6f8b 52%,#159b6b 100%);color:#fff;
+    padding:64px 0 56px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;inset:0;
+    background:radial-gradient(900px 380px at 85% -10%,rgba(255,255,255,.18),transparent 60%)}
+  .hero .wrap{position:relative;z-index:1}
+  .hero h1{font-size:clamp(2rem,4.6vw,3.1rem);line-height:1.1;margin:.1em 0 .25em;letter-spacing:-1px}
+  .hero p.tag{font-size:clamp(1.02rem,2vw,1.28rem);opacity:.95;max-width:780px;margin:0 0 22px}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:26px}
+  .chip{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+    border-radius:999px;padding:6px 13px;font-size:.85rem;font-weight:600;backdrop-filter:blur(4px)}
+  .chip.ok{background:rgba(22,163,74,.30);border-color:rgba(255,255,255,.5)}
+  .cta{display:flex;flex-wrap:wrap;gap:12px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border-radius:11px;padding:11px 18px;
+    font-weight:700;font-size:.95rem;transition:transform .12s ease,box-shadow .12s ease}
+  .btn:hover{transform:translateY(-2px);text-decoration:none}
+  .btn.primary{background:#fff;color:#1f6f8b;box-shadow:var(--shadow)}
+  .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.45)}
+
+  section{padding:54px 0}
+  section:nth-of-type(even){background:#fff;border-block:1px solid var(--line)}
+  h2{font-size:clamp(1.5rem,3vw,2rem);letter-spacing:-.5px;margin:0 0 6px}
+  .lead{color:var(--muted);max-width:800px;margin:0 0 26px}
+  .eyebrow{text-transform:uppercase;letter-spacing:1.5px;font-size:.75rem;font-weight:800;color:var(--accent);margin:0 0 6px}
+  p{margin:0 0 14px}
+
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 16px;text-align:center;box-shadow:var(--shadow)}
+  .stat .num{font-size:2.1rem;font-weight:800;color:var(--pg);line-height:1}
+  .stat .lbl{color:var(--muted);font-size:.84rem;margin-top:6px}
+  @media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+  .grid{display:grid;gap:18px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:900px){.g3{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.g3,.g2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px;box-shadow:var(--shadow);transition:transform .14s ease,box-shadow .14s ease}
+  .card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(16,32,46,.12)}
+  .card .ico{font-size:1.7rem}
+  .card h3{margin:8px 0 4px;font-size:1.08rem}
+  .card h3 .ver{font-size:.78rem;color:var(--muted);font-weight:600}
+  .card p{color:var(--muted);font-size:.92rem;margin:0}
+  .node{display:inline-block;margin-top:11px;font-size:.74rem;font-weight:700;color:var(--accent);
+    background:#eaf3f7;border:1px solid #d3e6ee;border-radius:999px;padding:3px 9px}
+
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;font-size:.92rem;min-width:520px}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line)}
+  thead th{background:#f1f5f9;color:var(--muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.5px}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:#f8fafc}
+  td.mono,.mono{font-family:Consolas,Menlo,monospace}
+  .pill{display:inline-block;font-size:.72rem;font-weight:700;border-radius:999px;padding:2px 9px}
+  .pill.dz{background:#fef3e2;color:#b45309;border:1px solid #f7d9ad}
+  .pill.safe{background:#e9f7ef;color:#15803d;border:1px solid #bfe6cd}
+  .pill.pass{background:#e9f7ef;color:#15803d;border:1px solid #bfe6cd}
+
+  figure{margin:0;background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;box-shadow:var(--shadow)}
+  figure img{width:100%;height:auto;display:block}
+  figcaption{color:var(--muted);font-size:.85rem;text-align:center;margin-top:10px}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .kv{list-style:none;margin:0;padding:0}
+  .kv li{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .kv li:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)} .kv .v{font-weight:700;font-family:Consolas,Menlo,monospace}
+
+  .banner{display:flex;align-items:center;gap:16px;background:linear-gradient(135deg,#0f9d58,#16a34a);
+    color:#fff;border-radius:var(--radius);padding:22px 24px;box-shadow:var(--shadow);flex-wrap:wrap}
+  .banner .big{font-size:2.4rem;font-weight:800;line-height:1}
+  .bar{background:#0b1722;border-radius:10px;height:30px;position:relative;overflow:hidden;margin:6px 0 4px}
+  .bar .gap{height:100%;background:linear-gradient(90deg,var(--red),var(--amber));border-radius:10px 0 0 10px}
+  .bar .lbl{position:absolute;inset:0;display:flex;align-items:center;padding-left:12px;color:#fff;font-size:.82rem;font-weight:600}
+  details{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:0 18px;box-shadow:var(--shadow);margin-top:18px}
+  details[open]{padding-bottom:8px}
+  summary{cursor:pointer;font-weight:700;padding:15px 0}
+
+  pre{background:#0b1722;color:#d7e3ee;border-radius:var(--radius);padding:18px;overflow-x:auto;
+    box-shadow:var(--shadow);font-size:.86rem;line-height:1.6}
+  pre .c{color:#7d97ab} pre .v{color:#7ee0b0}
+
+  footer{background:#0e1b27;color:#aebfce;padding:44px 0 36px}
+  footer a{color:#9cd1ff}
+  footer h4{color:#fff;margin:0 0 10px;font-size:.95rem}
+  .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:26px}
+  @media(max-width:760px){.fgrid{grid-template-columns:1fr}}
+  footer ul{list-style:none;margin:0;padding:0;font-size:.9rem}
+  footer li{margin:6px 0}
+  .fbot{border-top:1px solid #25323f;margin-top:26px;padding-top:18px;font-size:.84rem;color:#7d8b99}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <span class="brand">postgres18-ha-lab<span class="dot">.</span></span>
+    <div class="links">
+      <a href="#overview">Przegląd</a>
+      <a href="#architecture">Architektura</a>
+      <a href="#components">Komponenty</a>
+      <a href="#scenarios">Scenariusze</a>
+      <a href="#results">Wyniki</a>
+      <a href="#quickstart">Szybki start</a>
+    </div>
+    <a class="lang" href="index.html" title="English version">EN</a>
+    <a class="gh" href="https://github.com/krzysztof-i-cabaj/postgres18-ha-lab">GitHub ↗</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>🐘 Laboratorium Wysokiej Dostępności PostgreSQL&nbsp;18</h1>
+    <p class="tag">W pełni reprodukowalny klaster HA — <strong>Patroni · etcd · HAProxy · PgBouncer</strong>
+       na sześciu maszynach Rocky&nbsp;Linux&nbsp;9.8 — budowany i niszczony z hosta Windows&nbsp;11, na którym
+       jest tylko VirtualBox. 13 zeskryptowanych scenariuszy awarii dowodzi, że klaster naprawdę to przeżywa.</p>
+    <div class="chips">
+      <span class="chip ok">✓ 13/13 scenariuszy PASS</span>
+      <span class="chip">6 VM</span>
+      <span class="chip">PostgreSQL 18.3</span>
+      <span class="chip">Patroni 4.1</span>
+      <span class="chip">Rocky Linux 9.8</span>
+      <span class="chip">~30 min build</span>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="agentic-run-all_PL.html">📊 Pełny raport testów</a>
+      <a class="btn ghost" href="#architecture">🏛️ Architektura</a>
+      <a class="btn ghost" href="https://github.com/krzysztof-i-cabaj/postgres18-ha-lab">⭐ Zobacz na GitHub</a>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <p class="eyebrow">Czym to jest</p>
+    <h2>Praktyczny plac zabaw z wysoką dostępnością bazy</h2>
+    <p class="lead">Wszystko, czego trzeba, by <em>zobaczyć</em> jak wysoka dostępność PostgreSQL działa — i jak ją
+       złamać — w bezpiecznym, powtarzalnym labie na VM.</p>
+    <div class="cols">
+      <div>
+        <p>Lab stawia klaster PostgreSQL&nbsp;18 w kształcie produkcyjnym: trzy węzły bazodanowe zarządzane przez
+           <strong>Patroni</strong>, trójwęzłowy magazyn konsensusu <strong>etcd</strong>, load balancer
+           <strong>HAProxy</strong> kierujący zapisy zawsze do aktualnego lidera, pooling połączeń
+           <strong>PgBouncer</strong>, oraz infrastrukturę <strong>Unbound</strong> (DNS) i <strong>chrony</strong>
+           (NTP) — sześć maszyn w prywatnej sieci host-only.</p>
+        <p>Całość sterowana jest z jednego entrypointu PowerShell (<code>lab.ps1</code>) na Windows&nbsp;11 — bez
+           Ansible, bez WSL, tylko VirtualBox. Zbuduj, obserwuj samonaprawę, uruchom serię 13 scenariuszy awarii
+           i zmierz, jak prawdziwa aplikacja przeżywa failover — co do sekundy.</p>
+      </div>
+      <div class="grid g2" style="align-content:start">
+        <div class="card"><div class="ico">🪟</div><h3>Natywnie na Windows</h3><p>Sterowane w całości z Windows 11 + VirtualBox. Jeden dispatcher <code>lab.ps1</code> buduje i usuwa lab.</p></div>
+        <div class="card"><div class="ico">🔁</div><h3>Samonaprawa</h3><p>Zabij lidera, potnij sieć, strać kworum etcd — klaster sam promuje, przekierowuje i dołącza węzły.</p></div>
+        <div class="card"><div class="ico">📈</div><h3>Dowód od strony aplikacji</h3><p>Pythonowy klient generuje ciągły ruch przez failover i rejestruje realne okno niedostępności.</p></div>
+        <div class="card"><div class="ico">🧪</div><h3>13 scenariuszy</h3><p>Od sanity po kaskadowy podwójny failover i pg_rewind — każdy z automatycznymi asercjami PASS/FAIL.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="stats">
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><div class="num" data-count="6">6</div><div class="lbl">Maszyny wirtualne</div></div>
+      <div class="stat"><div class="num" data-count="9">9</div><div class="lbl">Komponenty (klocki)</div></div>
+      <div class="stat"><div class="num" data-count="13">13</div><div class="lbl">Scenariusze awarii</div></div>
+      <div class="stat"><div class="num" data-count="13" data-suffix="/13">13/13</div><div class="lbl">Scenariuszy PASS</div></div>
+      <div class="stat"><div class="num" data-count="8">8</div><div class="lbl">Bugów znalez. i naprawionych</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <p class="eyebrow">Architektura</p>
+    <h2>Sześć VM w jednej sieci host-only</h2>
+    <p class="lead">Trzy węzły PostgreSQL, load balancer, węzeł infrastruktury (DNS+NTP) oraz orkiestrator/klient —
+       wszystko w <code>192.168.56.0/24</code>.</p>
+    <figure>
+      <img src="diagrams/architecture_PL.svg" alt="Architektura klastra: 6 VM, Patroni/etcd na pg1-3, HAProxy/PgBouncer na lb, Unbound/chrony na infra, pgha-client na cli">
+      <figcaption>Topologia klastra i połączenia komponentów — zobacz też osobną
+        <a href="architecture.html">stronę architektury</a>.</figcaption>
+    </figure>
+    <div class="tbl-wrap" style="margin-top:18px">
+      <table>
+        <thead><tr><th>VM</th><th>Hostname</th><th>IP</th><th>RAM</th><th>vCPU</th><th>Rola / komponenty</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">infra</td><td class="mono">infra.lab.test</td><td class="mono">192.168.56.10</td><td>1 GB</td><td>1</td><td>DNS (Unbound) + NTP (chronyd)</td></tr>
+          <tr><td class="mono">pg1</td><td class="mono">pg1.lab.test</td><td class="mono">192.168.56.11</td><td>4 GB</td><td>2</td><td>PostgreSQL 18.3 · Patroni · etcd</td></tr>
+          <tr><td class="mono">pg2</td><td class="mono">pg2.lab.test</td><td class="mono">192.168.56.12</td><td>4 GB</td><td>2</td><td>PostgreSQL 18.3 · Patroni · etcd</td></tr>
+          <tr><td class="mono">pg3</td><td class="mono">pg3.lab.test</td><td class="mono">192.168.56.13</td><td>4 GB</td><td>2</td><td>PostgreSQL 18.3 · Patroni · etcd</td></tr>
+          <tr><td class="mono">lb</td><td class="mono">lb.lab.test</td><td class="mono">192.168.56.20</td><td>2 GB</td><td>2</td><td>HAProxy 2.8 · PgBouncer 1.23</td></tr>
+          <tr><td class="mono">cli</td><td class="mono">cli.lab.test</td><td class="mono">192.168.56.30</td><td>2 GB</td><td>2</td><td>Orkiestrator · pgha-client (Python 3.11)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="components">
+  <div class="wrap">
+    <p class="eyebrow">Klocki</p>
+    <h2>„Klocki”, które dają wysoką dostępność</h2>
+    <p class="lead">Każdy komponent ma jedno zadanie. Razem zapewniają automatyczny failover bez utraty danych.</p>
+    <div class="grid g3">
+      <div class="card"><div class="ico">🐘</div><h3>PostgreSQL <span class="ver">18.3</span></h3><p>Trójwęzłowy klaster z replikacją streaming, baza <code>labdb</code>. Replikacja synchroniczna gwarantuje, że zatwierdzony wiersz przeżyje failover.</p><span class="node">pg1 · pg2 · pg3</span></div>
+      <div class="card"><div class="ico">🧭</div><h3>Patroni <span class="ver">4.1</span></h3><p>Nadzorca HA. Odnawia dzierżawę lidera w etcd, promuje replikę przy utracie lidera (~30 s) i uruchamia <code>pg_rewind</code>, by dołączyć stare primary. REST API na <code>:8008</code>.</p><span class="node">pg1 · pg2 · pg3</span></div>
+      <div class="card"><div class="ico">🗳️</div><h3>etcd <span class="ver">3.5</span></h3><p>Rozproszony magazyn konsensusu — „mózg” klastra. Trzyma blokadę lidera (TTL 30 s) i konfigurację. Kworum 2/3 utrzymuje zapisywalność; jego utrata uruchamia failsafe.</p><span class="node">pg1 · pg2 · pg3</span></div>
+      <div class="card"><div class="ico">🔀</div><h3>HAProxy <span class="ver">2.8</span></h3><p>Router TCP używający health-checków REST Patroni: <code>:5000</code>→lider (zapisy), <code>:5001</code>→repliki (odczyty), statystyki na <code>:7000</code>. Przy failoverze przekierowuje automatycznie.</p><span class="node">lb</span></div>
+      <div class="card"><div class="ico">🪣</div><h3>PgBouncer <span class="ver">1.23</span></h3><p>Pooler połączeń przed HAProxy — utrzymuje niski narzut na zapytanie pod obciążeniem.</p><span class="node">lb</span></div>
+      <div class="card"><div class="ico">🌐</div><h3>Unbound DNS</h3><p>Autorytatywny dla <code>lab.test</code>, rekursywny dla reszty. Rozwiązuje stabilny endpoint aplikacji <code>db.lab.test</code> → <code>lb.lab.test</code>.</p><span class="node">infra</span></div>
+      <div class="card"><div class="ico">⏱️</div><h3>chronyd NTP</h3><p>Źródło czasu stratum-2 na infra; każdy inny węzeł synchronizuje się z nim — spójne zegary w całym klastrze.</p><span class="node">infra → wszystkie</span></div>
+      <div class="card"><div class="ico">🐍</div><h3>pgha-client</h3><p>Pythonowy klient testowy: <code>writer</code>/<code>reader</code> generują ruch i mierzą przerwy oraz downtime; <code>monitor</code> pokazuje live TUI klastra. Napędza scenariusz 13.</p><span class="node">cli</span></div>
+      <div class="card"><div class="ico">🐕</div><h3>softdog (watchdog)</h3><p>Sprzętowy fencing jądra. Gdy zawieszony lider nie odnowi dzierżawy, jądro restartuje węzeł i natychmiast zwalnia blokadę.</p><span class="node">pg1 · pg2 · pg3</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="config">
+  <div class="wrap">
+    <p class="eyebrow">Konfiguracja</p>
+    <h2>Wersje i sieć</h2>
+    <div class="cols">
+      <div class="card">
+        <h3>📦 Przypięte wersje</h3>
+        <ul class="kv">
+          <li><span class="k">PostgreSQL</span><span class="v">18.3</span></li>
+          <li><span class="k">Patroni</span><span class="v">4.1</span></li>
+          <li><span class="k">etcd</span><span class="v">3.5</span></li>
+          <li><span class="k">HAProxy</span><span class="v">2.8</span></li>
+          <li><span class="k">PgBouncer</span><span class="v">1.23</span></li>
+          <li><span class="k">System gościa</span><span class="v">Rocky Linux 9.8</span></li>
+          <li><span class="k">Runtime klienta</span><span class="v">Python 3.11</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🌐 Sieć i infrastruktura</h3>
+        <ul class="kv">
+          <li><span class="k">Adapter host-only</span><span class="v">vboxnet0</span></li>
+          <li><span class="k">Podsieć</span><span class="v">192.168.56.0/24</span></li>
+          <li><span class="k">Domena</span><span class="v">lab.test</span></li>
+          <li><span class="k">Endpoint aplikacji</span><span class="v">db.lab.test:5000</span></li>
+          <li><span class="k">DNS</span><span class="v">Unbound @ infra</span></li>
+          <li><span class="k">NTP</span><span class="v">chrony @ infra</span></li>
+          <li><span class="k">Statystyki HAProxy</span><span class="v">:7000/stats</span></li>
+        </ul>
+      </div>
+    </div>
+    <div style="margin-top:26px">
+      <p class="eyebrow">Przebieg failoveru</p>
+      <figure>
+        <img src="diagrams/failover-flow_PL.svg" alt="Sekwencja failoveru: heartbeat lidera, wygaśnięcie dzierżawy etcd, promocja repliki, przekierowanie HAProxy">
+        <figcaption>Heartbeat → wygaśnięcie dzierżawy etcd → promocja repliki → HAProxy przekierowuje zapisy na nowego lidera.</figcaption>
+      </figure>
+      <figure style="margin-top:18px">
+        <img src="diagrams/dns-flow_PL.svg" alt="Przepływ rozwiązywania DNS przez Unbound na węźle infra">
+        <figcaption>Rozwiązywanie nazw: Unbound obsługuje <code>*.lab.test</code> autorytatywnie, resztę rekursywnie.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="scenarios">
+  <div class="wrap">
+    <p class="eyebrow">Scenariusze testowe</p>
+    <h2>13 zeskryptowanych trybów awarii</h2>
+    <p class="lead">Każdy to skrypt bash z asercjami <code>PASS/FAIL</code>, uruchamialny pojedynczo
+       (<code>lab.ps1 scenario NN</code>) lub jako seria. <span class="pill dz">destrukcyjne</span> zabijają
+       procesy lub VM — klaster się samonaprawia.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenariusz</th><th>Co dowodzi</th><th></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">01</td><td class="mono">baseline</td><td>Jest lider, etcd 3/3, odczyt+zapis przez HAProxy</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">02</td><td class="mono">kill-primary-hard</td><td><code>pkill -9 postgres</code> na liderze — zero utraty danych (sentinel przeżywa)</td><td><span class="pill dz">destrukcyjny</span></td></tr>
+          <tr><td class="mono">03</td><td class="mono">poweroff-primary-vm</td><td>Host wyłącza VM lidera (<code>VBoxManage</code>) → failover → restart</td><td><span class="pill dz">destrukcyjny</span></td></tr>
+          <tr><td class="mono">04</td><td class="mono">graceful-switchover</td><td>Planowy <code>patronictl switchover</code> do sync standby, bez utraty danych</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">05</td><td class="mono">network-partition</td><td><code>iptables</code> izoluje lidera → failover, partycja samogojąca</td><td><span class="pill dz">destrukcyjny</span></td></tr>
+          <tr><td class="mono">06</td><td class="mono">etcd-single-loss</td><td>Stop etcd na 1 węźle — kworum 2/3 trzyma, klaster działa</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">07</td><td class="mono">etcd-quorum-loss</td><td>Stop etcd na 2 węzłach — tryb failsafe (odczyt OK), potem powrót</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">08</td><td class="mono">replica-restart</td><td>Restart Patroni na replice — lider bez zmian, szybki rejoin</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">09</td><td class="mono">pg-rewind-old-primary</td><td>Stare primary dołącza przez <code>pg_rewind</code> po rozjeździe linii czasu</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">10</td><td class="mono">sync-vs-async</td><td>Przełączanie <code>synchronous_mode</code> — kompromis trwałość vs dostępność</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">11</td><td class="mono">multi-host-libpq</td><td>Failover bez drivera: libpq <code>target_session_attrs=read-write</code> sam znajduje lidera</td><td><span class="pill safe">bezpieczny</span></td></tr>
+          <tr><td class="mono">12</td><td class="mono">cascading-failure</td><td>Zabij lidera, potem nowego lidera — wybrany zostaje trzeci</td><td><span class="pill dz">destrukcyjny</span></td></tr>
+          <tr><td class="mono">13</td><td class="mono">app-failover-continuous</td><td>Ruch pgha-client przez zabicie lidera — pomiar downtime od strony aplikacji</td><td><span class="pill dz">destrukcyjny</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <p class="eyebrow">Wyniki</p>
+    <h2>Agentowy przebieg pełnej suity — 13/13 PASS</h2>
+    <p class="lead">Cała suita (01–13) została wykonana agentowo na żywym klastrze — przez SSH, a akcję hosta dla
+       scenariusza 03 napędził <code>VBoxManage</code>. Klaster nie był resetowany między scenariuszami; przez
+       cały czas sam się odbudowywał.</p>
+    <div class="banner">
+      <div class="big">13/13</div>
+      <div>
+        <strong>scenariuszy zaliczonych</strong> · klaster wrócił do zdrowego stanu 3/3<br>
+        <span style="opacity:.9">8 realnych defektów ujawniono i naprawiono po drodze — autentyczny zapis „uruchom → diagnoza → fix → re-run”.</span>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:22px">
+      <div class="card"><div class="ico">⏱️</div><h3>Downtime aplikacji <span class="ver">scenariusz 13</span></h3>
+        <div class="bar"><div class="gap" style="width:17%"></div><div class="lbl">~10 s przerwy w 60 s przebiegu</div></div>
+        <p>Writer wstawiał dalej (500 inserts, 1 outage, 3 reconnecty); HAProxy przeniósł zapisy na nowego lidera, a aplikacja wznowiła pracę automatycznie.</p></div>
+      <div class="card"><div class="ico">📥</div><h3>Postęp readera</h3><p>Reader widział rosnące zatwierdzone wiersze <code>max_id 1821 → 2337</code> przez failover — replikacja nie stanęła.</p><span class="node">lider pg2 → pg3</span></div>
+      <div class="card"><div class="ico">🛡️</div><h3>Zero utraty danych</h3><p>W <code>kill-primary-hard</code> wiersz zatwierdzony <em>przed</em> zabiciem przetrwał — replikacja synchroniczna dotrzymała obietnicy.</p><span class="node">scenariusz 02</span></div>
+    </div>
+
+    <details>
+      <summary>🐛 8 defektów znalezionych i naprawionych w trakcie (objaw → przyczyna → fix)</summary>
+      <div class="tbl-wrap" style="box-shadow:none;border:0">
+        <table>
+          <thead><tr><th>Objaw</th><th>Przyczyna</th><th>Naprawa</th></tr></thead>
+          <tbody>
+            <tr><td><code>switchover --master</code> → No such option</td><td>Patroni 4.x usunął <code>--master</code></td><td>użyj <code>--leader</code></td></tr>
+            <tr><td><code>edit-config --apply '{json}'</code> błąd</td><td><code>--apply</code> oczekuje pliku, nie inline JSON</td><td>zapis pliku tymczasowego</td></tr>
+            <tr><td>412 — candidate ≠ sync_standby</td><td>tryb sync wymaga sync standby jako kandydata</td><td>wybór sync_standby + fallback</td></tr>
+            <tr><td>zapis pada zaraz po failoverze</td><td>nowy lider czeka na nowy sync standby</td><td><code>wait_writable</code> + bufor</td></tr>
+            <tr><td>lider się nie zmienił po <code>pkill</code></td><td>Patroni restartuje postgres przed wygaśnięciem dzierżawy</td><td>dodatkowo <code>systemctl stop patroni</code></td></tr>
+            <tr><td>skażony <code>id</code> sentinela</td><td>psql dokleja wiersz tagu polecenia</td><td><code>head -n1</code></td></tr>
+            <tr><td>scenariusz zawisł, węzeł odcięty</td><td><code>iptables DROP</code> odciął też hosta</td><td>samogojący timer na węźle</td></tr>
+            <tr><td>drugi failover nie nastąpił</td><td>drugie zabicie przed odtworzeniem sync standby</td><td><code>wait_writable</code> między zabiciami</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <div class="cta" style="margin-top:24px">
+      <a class="btn primary" href="agentic-run-all_PL.html" style="color:#1f6f8b">📊 Agentowy przebieg pełnej suity</a>
+      <a class="btn ghost" href="run-report_PL.html" style="color:#1f6f8b;border-color:#cfe0e8">📃 Ostatni raport przebiegu</a>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <p class="eyebrow">Szybki start</p>
+    <h2>Budowa i testy z PowerShell</h2>
+    <p class="lead">Jeden dispatcher, kilka czasowników. Pełny przewodnik w
+       <a href="QUICKSTART_PL.md">QUICKSTART_PL.md</a> · budowa ręczna w
+       <a href="MANUAL_INSTALL_PL.md">MANUAL_INSTALL_PL.md</a>.</p>
+    <pre><span class="c"># weryfikacja hosta (VirtualBox, RAM, dysk, klucz SSH)</span>
+.\lab.ps1 prereqs
+<span class="c"># zbuduj cały lab od zera (~30 min)</span>
+.\lab.ps1 build
+<span class="c"># DNS Windows dla *.lab.test (jednorazowo, elevated shell)</span>
+.\lab.ps1 dns install
+<span class="c"># pokaż stan VM + klastra Patroni</span>
+.\lab.ps1 status
+<span class="c"># uruchom pojedynczy scenariusz albo całą serię (01–13)</span>
+.\lab.ps1 scenario 13
+.\lab.ps1 scenario all
+<span class="c"># zbuduj interaktywny raport HTML z przebiegu</span>
+.\lab.ps1 report agentic</pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <h4>🐘 postgres18-ha-lab</h4>
+        <p style="color:#aebfce">Reprodukowalne laboratorium wysokiej dostępności PostgreSQL 18 dla Windows 11 +
+           VirtualBox. Autor: <strong>KCB&nbsp;Kris</strong> · Licencja: MIT.</p>
+        <p><a href="https://github.com/krzysztof-i-cabaj/postgres18-ha-lab">github.com/krzysztof-i-cabaj/postgres18-ha-lab ↗</a></p>
+      </div>
+      <div>
+        <h4>Raporty</h4>
+        <ul>
+          <li><a href="agentic-run-all_PL.html">Agentowy przebieg suity</a></li>
+          <li><a href="run-report_PL.html">Ostatni raport</a></li>
+          <li><a href="architecture.html">Strona architektury</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Dokumentacja</h4>
+        <ul>
+          <li><a href="README_PL.md">Indeks dokumentacji</a></li>
+          <li><a href="ARCHITECTURE_PL.md">Architektura</a></li>
+          <li><a href="SCENARIOS_PL.md">Scenariusze</a></li>
+          <li><a href="QUICKSTART_PL.md">Szybki start</a></li>
+          <li><a href="index.html">🇬🇧 English version</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="fbot">© 2026 KCB Kris · Licencja MIT · PostgreSQL 18 HA Lab · Patroni · etcd · HAProxy · PgBouncer</div>
+  </div>
+</footer>
+
+<script>
+  var links = [].slice.call(document.querySelectorAll('nav .links a'));
+  var map = {};
+  links.forEach(function(a){ var id=a.getAttribute('href').slice(1); var s=document.getElementById(id); if(s) map[id]=a; });
+  var obs = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){ links.forEach(function(l){l.classList.remove('active');});
+        var a=map[e.target.id]; if(a)a.classList.add('active'); }
+    });
+  },{rootMargin:'-45% 0px -50% 0px'});
+  Object.keys(map).forEach(function(id){ obs.observe(document.getElementById(id)); });
+
+  function animate(el){
+    var target=parseInt(el.getAttribute('data-count'),10);
+    var suffix=el.getAttribute('data-suffix')||'';
+    var t0=null, dur=1100;
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/dur,1);
+      el.textContent=Math.round(p*target)+suffix; if(p<1)requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  }
+  var sObs=new IntersectionObserver(function(entries,o){
+    entries.forEach(function(e){ if(e.isIntersecting){ animate(e.target); o.unobserve(e.target); } });
+  },{threshold:.5});
+  [].slice.call(document.querySelectorAll('.stat .num')).forEach(function(n){ sObs.observe(n); });
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" font-family="Segoe UI, sans-serif" font-size="13">
+  <defs>
+    <style>
+      .step  { fill: #f7fbff; stroke: #336791; stroke-width: 1.5; }
+      .death { fill: #fdecea; stroke: #c0392b; stroke-width: 1.5; }
+      .new   { fill: #e6f4ea; stroke: #1b873b; stroke-width: 1.5; }
+      .lbl   { font-weight: 600; fill: #1a1a1a; }
+      .sub   { font-size: 11px; fill: #555; }
+      .arr   { stroke: #555; stroke-width: 1.2; fill: none; marker-end: url(#arrf); }
+    </style>
+    <marker id="arrf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <text x="450" y="28" text-anchor="middle" class="lbl" font-size="18">Patroni failover flow</text>
+  <text x="450" y="48" text-anchor="middle" class="sub">leader dies → etcd lease expires → replica promotes → HAProxy reroutes</text>
+
+  <!-- t=0 -->
+  <text x="50" y="100" class="lbl">t=0</text>
+  <rect x="100" y="80" width="200" height="50" rx="6" class="step"/>
+  <text x="200" y="100" text-anchor="middle">pg1 = leader</text>
+  <text x="200" y="118" text-anchor="middle" class="sub">heartbeat → etcd every 10s</text>
+
+  <!-- t≈1s -->
+  <text x="50" y="170" class="lbl">t≈1s</text>
+  <rect x="100" y="150" width="200" height="50" rx="6" class="death"/>
+  <text x="200" y="170" text-anchor="middle">pg1: pkill -9 postgres</text>
+  <text x="200" y="188" text-anchor="middle" class="sub">last heartbeat in etcd, then silence</text>
+
+  <!-- t≈30s -->
+  <text x="50" y="240" class="lbl">t≈30s</text>
+  <rect x="100" y="220" width="200" height="50" rx="6" class="step"/>
+  <text x="200" y="240" text-anchor="middle">leader lease expires</text>
+  <text x="200" y="258" text-anchor="middle" class="sub">DCS (etcd) marks the slot empty</text>
+
+  <!-- t≈30s replicas race -->
+  <text x="50" y="310" class="lbl">t≈30s</text>
+  <rect x="100" y="290" width="200" height="50" rx="6" class="step"/>
+  <text x="200" y="310" text-anchor="middle">pg2/pg3 race for leader lock</text>
+  <text x="200" y="328" text-anchor="middle" class="sub">first to write wins</text>
+
+  <!-- t≈31s new leader -->
+  <text x="50" y="380" class="lbl">t≈31s</text>
+  <rect x="100" y="360" width="200" height="50" rx="6" class="new"/>
+  <text x="200" y="380" text-anchor="middle">pg2 = new leader</text>
+  <text x="200" y="398" text-anchor="middle" class="sub">pg_ctl promote (inside Patroni)</text>
+
+  <!-- t≈36s HAProxy reroutes -->
+  <text x="50" y="450" class="lbl">t≈36s</text>
+  <rect x="100" y="430" width="200" height="50" rx="6" class="new"/>
+  <text x="200" y="450" text-anchor="middle">HAProxy reroutes :5000 → pg2</text>
+  <text x="200" y="468" text-anchor="middle" class="sub">httpchk /primary detects within 5s</text>
+
+  <!-- arrows on left side -->
+  <path class="arr" d="M200,130 L200,150"/>
+  <path class="arr" d="M200,200 L200,220"/>
+  <path class="arr" d="M200,270 L200,290"/>
+  <path class="arr" d="M200,340 L200,360"/>
+  <path class="arr" d="M200,410 L200,430"/>
+
+  <!-- Right column: client view -->
+  <text x="450" y="100" class="lbl">Client view (writer)</text>
+
+  <rect x="430" y="120" width="450" height="50" rx="6" class="step"/>
+  <text x="655" y="140" text-anchor="middle" class="sub">writes succeed @ db.lab.test:5000 → pg1</text>
+  <text x="655" y="158" text-anchor="middle" class="sub" fill="#1b873b">throughput steady</text>
+
+  <rect x="430" y="190" width="450" height="50" rx="6" class="death"/>
+  <text x="655" y="210" text-anchor="middle" class="sub">connection errors / timeouts</text>
+  <text x="655" y="228" text-anchor="middle" class="sub" fill="#c0392b">writer reconnect loop, ~5–10s of failures</text>
+
+  <rect x="430" y="260" width="450" height="50" rx="6" class="step"/>
+  <text x="655" y="280" text-anchor="middle" class="sub">writes hit closed connections during election (~30s)</text>
+  <text x="655" y="298" text-anchor="middle" class="sub">no data loss with synchronous_mode=true + sync standby</text>
+
+  <rect x="430" y="330" width="450" height="50" rx="6" class="new"/>
+  <text x="655" y="350" text-anchor="middle" class="sub">HAProxy primary listener now points to pg2</text>
+  <text x="655" y="368" text-anchor="middle" class="sub" fill="#1b873b">writer's next reconnect succeeds</text>
+
+  <rect x="430" y="400" width="450" height="50" rx="6" class="new"/>
+  <text x="655" y="420" text-anchor="middle" class="sub">throughput resumes; pg1 will rejoin via pg_rewind when restarted</text>
+</svg>

@@ -1,0 +1,125 @@
+# ==============================================================================
+# Tytul:        base.ks.tmpl
+# Opis:         Master kickstart template dla wszystkich VMek labu PG18 HA.
+#               Placeholdery: {{IP}} {{HOSTNAME}} {{ROLE}} {{SSH_PUBKEY}}
+#               {{HOST_IP}} {{KS_PORT}} {{INFRA_IP}} {{DOMAIN}}
+#               Renderowany przez Invoke-RenderKickstarts (PgHaLab.psm1).
+# Description [EN]: Master kickstart template for every PG18 HA lab VM.
+#               Placeholders: {{IP}} {{HOSTNAME}} {{ROLE}} {{SSH_PUBKEY}}
+#               {{HOST_IP}} {{KS_PORT}} {{INFRA_IP}} {{DOMAIN}}
+#               Rendered by Invoke-RenderKickstarts (PgHaLab.psm1).
+#
+# Autor:        KCB Kris
+# Data:         2026-05-02
+# Wersja:       1.0
+# <repo>:       <repo>
+# Konwencje:    <repo>/SETTINGS.md
+#
+# Wymagania [PL]:    - Rocky Linux 9.8 minimal ISO, sciezka do KS server na hoscie
+# Requirements [EN]: - Rocky Linux 9.8 minimal ISO, KS server URL on host
+#
+# Uzycie [PL]:       Renderowany automatycznie przez `lab.ps1 build`.
+# Usage [EN]:        Rendered automatically by `lab.ps1 build`.
+# ==============================================================================
+
+text
+lang en_US.UTF-8
+keyboard us
+timezone Europe/Warsaw --utc
+rootpw --plaintext labroot
+user --name=lab --password=lab --groups=wheel
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,chronyd,NetworkManager
+
+# enp0s3 = host-only (lab-internal 192.168.56.0/24): BEZ bramy domyslnej --
+# --nodefroute, inaczej slepa brama 192.168.56.1 (host nie routuje) wygrywa nad NAT.
+# Nameservery publiczne na czas firstboot (dnf), zanim wstanie Unbound na infra.
+# enp0s3 = host-only: NO default route (--nodefroute) or the dead-end host-only
+# gateway beats NAT; public nameservers for firstboot dnf before Unbound is up.
+network --bootproto=static --device=enp0s3 --ip={{IP}} --netmask=255.255.255.0 --hostname={{HOSTNAME}} --nodefroute --nameserver=1.1.1.1,9.9.9.9 --activate
+# enp0s8 = NAT: dostarcza trase domyslna (internet) + DHCP / provides default route (internet)
+network --bootproto=dhcp --device=enp0s8 --activate
+
+url --url=https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/
+repo --name=appstream --baseurl=https://download.rockylinux.org/pub/rocky/9/AppStream/x86_64/os/
+
+zerombr
+clearpart --all --initlabel
+autopart --type=lvm --noswap
+bootloader --location=mbr
+
+%packages
+@core
+openssh-server
+chrony
+vim-minimal
+python3
+curl
+tar
+gzip
+NetworkManager
+firewalld
+%end
+
+%post --interpreter=/bin/bash --log=/var/log/postgres18-ha-lab-post.log
+set -euo pipefail
+
+# --- SSH host key for root + lab user (rendered from host) -------------------
+mkdir -p /root/.ssh
+echo '{{SSH_PUBKEY}}' > /root/.ssh/authorized_keys
+chmod 700 /root/.ssh
+chmod 600 /root/.ssh/authorized_keys
+
+mkdir -p /home/lab/.ssh
+echo '{{SSH_PUBKEY}}' > /home/lab/.ssh/authorized_keys
+chmod 700 /home/lab/.ssh
+chmod 600 /home/lab/.ssh/authorized_keys
+chown -R lab:lab /home/lab/.ssh
+
+echo 'lab ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/lab
+chmod 440 /etc/sudoers.d/lab
+
+# --- /etc/hosts fallback (in case DNS via infra is not yet available) --------
+cat >> /etc/hosts <<'EOF'
+{{INFRA_IP}} infra.{{DOMAIN}} infra
+EOF
+
+# --- Role marker -------------------------------------------------------------
+mkdir -p /etc/postgres18-ha-lab
+echo '{{ROLE}}' > /etc/postgres18-ha-lab/role
+echo '{{HOSTNAME}}' > /etc/postgres18-ha-lab/hostname
+echo '{{IP}}' > /etc/postgres18-ha-lab/ip
+echo '{{INFRA_IP}}' > /etc/postgres18-ha-lab/infra_ip
+echo '{{DOMAIN}}' > /etc/postgres18-ha-lab/domain
+echo 'http://{{HOST_IP}}:{{KS_PORT}}' > /etc/postgres18-ha-lab/ks_server
+
+# --- Pull role-bootstrap.sh from host KS server ------------------------------
+mkdir -p /usr/local/lib/postgres18-ha-lab
+curl -fsSL "http://{{HOST_IP}}:{{KS_PORT}}/kickstart/post/role-bootstrap.sh" \
+    -o /usr/local/lib/postgres18-ha-lab/role-bootstrap.sh
+chmod +x /usr/local/lib/postgres18-ha-lab/role-bootstrap.sh
+
+# --- Install firstboot-role.service ------------------------------------------
+cat > /etc/systemd/system/firstboot-role.service <<'EOF'
+[Unit]
+Description=PostgreSQL 18 HA Lab role bootstrap (first boot)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/postgres18-ha-lab/.bootstrapped
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/postgres18-ha-lab/role-bootstrap.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+mkdir -p /var/lib/postgres18-ha-lab
+systemctl enable firstboot-role.service
+%end
+
+reboot --eject

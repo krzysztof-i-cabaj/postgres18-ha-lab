@@ -1,0 +1,54 @@
+# Local lab configuration with secrets
+lab.config.psd1
+
+# ISO cache (downloaded by Iso.psm1)
+.cache/
+*.iso
+
+# Build artefacts
+*.vdi
+*.vbox*
+
+# Logs and reports
+logs/
+reports/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# PowerShell
+*.ps1xml.bak
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Pester test output
+testResults.xml
+coverage.xml
+
+# Generated kickstart files (rendered from base.ks.tmpl by lab.ps1)
+kickstart/infra.ks
+kickstart/pg1.ks
+kickstart/pg2.ks
+kickstart/pg3.ks
+kickstart/lb.ks
+kickstart/cli.ks
+
+# Runtime config rendered for cli VM
+guest/lab.config.json

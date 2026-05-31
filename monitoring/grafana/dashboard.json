@@ -1,0 +1,32 @@
+{
+  "title": "postgres18-ha-lab — overview",
+  "uid": "pgha-lab",
+  "description": "Optional Grafana dashboard placeholder. Wire to Prometheus on cli.",
+  "editable": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Patroni leader",
+      "targets": [
+        { "expr": "patroni_master{cluster=\"pg-ha-lab\"}" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Replication lag (bytes)",
+      "targets": [
+        { "expr": "pg_replication_lag_bytes{cluster=\"pg-ha-lab\"}" }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "etcd healthy nodes",
+      "targets": [
+        { "expr": "count(up{job=\"patroni\"} == 1)" }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1,
+  "tags": ["postgres", "patroni", "ha-lab"]
+}

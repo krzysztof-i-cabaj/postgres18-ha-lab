@@ -1,0 +1,38 @@
+server:
+    interface: 0.0.0.0
+    port: 53
+    do-ip4: yes
+    do-ip6: no
+    access-control: 192.168.56.0/24 allow
+    access-control: 127.0.0.0/8 allow
+
+    verbosity: 1
+    log-queries: no
+    log-replies: no
+
+    # Authoritative for @@DOMAIN@@
+    local-zone: "@@DOMAIN@@." static
+    local-data: "infra.@@DOMAIN@@. IN A 192.168.56.10"
+    local-data: "pg1.@@DOMAIN@@.   IN A 192.168.56.11"
+    local-data: "pg2.@@DOMAIN@@.   IN A 192.168.56.12"
+    local-data: "pg3.@@DOMAIN@@.   IN A 192.168.56.13"
+    local-data: "lb.@@DOMAIN@@.    IN A 192.168.56.20"
+    local-data: "cli.@@DOMAIN@@.   IN A 192.168.56.30"
+
+    # Reverse zone
+    local-zone: "56.168.192.in-addr.arpa." static
+    local-data-ptr: "192.168.56.10 infra.@@DOMAIN@@."
+    local-data-ptr: "192.168.56.11 pg1.@@DOMAIN@@."
+    local-data-ptr: "192.168.56.12 pg2.@@DOMAIN@@."
+    local-data-ptr: "192.168.56.13 pg3.@@DOMAIN@@."
+    local-data-ptr: "192.168.56.20 lb.@@DOMAIN@@."
+    local-data-ptr: "192.168.56.30 cli.@@DOMAIN@@."
+
+    # Stable client endpoint
+    local-data: "db.@@DOMAIN@@. IN CNAME lb.@@DOMAIN@@."
+
+forward-zone:
+    name: "."
+    forward-addr: 1.1.1.1
+    forward-addr: 9.9.9.9
+    forward-addr: 8.8.8.8

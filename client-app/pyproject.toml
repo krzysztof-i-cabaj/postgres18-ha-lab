@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pgha-client"
+version = "1.0.0"
+description = "PostgreSQL 18 HA Lab — writer/reader/monitor test client"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "KCB Kris" }]
+license = { text = "MIT" }
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "rich>=13",
+    "click>=8",
+]
+
+[project.scripts]
+pgha-client = "pgha_client.__main__:cli"
+
+[tool.setuptools.packages.find]
+include = ["pgha_client*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true

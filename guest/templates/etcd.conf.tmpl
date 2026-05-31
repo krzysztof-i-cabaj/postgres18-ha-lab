@@ -1,0 +1,17 @@
+name: '@@HOSTNAME@@'
+data-dir: '/var/lib/etcd/default.etcd'
+
+listen-peer-urls: 'http://@@IP@@:2380'
+listen-client-urls: 'http://@@IP@@:2379,http://127.0.0.1:2379'
+
+initial-advertise-peer-urls: 'http://@@IP@@:2380'
+advertise-client-urls: 'http://@@IP@@:2379'
+
+initial-cluster: 'pg1=http://192.168.56.11:2380,pg2=http://192.168.56.12:2380,pg3=http://192.168.56.13:2380'
+initial-cluster-state: 'new'
+initial-cluster-token: 'etcd-cluster-pg-ha-lab'
+
+# In a real cluster, change to TLS. Lab keeps it simple.
+auto-compaction-mode: 'periodic'
+auto-compaction-retention: '1h'
+quota-backend-bytes: 2147483648

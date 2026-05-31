@@ -1,0 +1,21 @@
+# ==============================================================================
+# Tytul:        .gitattributes
+# Opis:         Deterministyczne konce linii niezaleznie od core.autocrlf usera.
+# Description [EN]: Deterministic line endings regardless of the user's core.autocrlf.
+#
+# Autor:        KCB Kris
+# Data:         2026-05-31
+# Wersja:       1.0
+# Konwencje:    <repo>/SETTINGS.md
+# ==============================================================================
+
+# Default: detect text, store LF in the repo, check out LF in the working tree.
+* text=auto eol=lf
+
+# PowerShell must stay CRLF in the working tree (Windows tooling + encoding-audit).
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Compiled Python is binary (defensive; normally gitignored).
+*.pyc binary

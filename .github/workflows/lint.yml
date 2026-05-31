@@ -1,0 +1,83 @@
+name: lint
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on guest/ + scenarios/
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          find guest scenarios kickstart/post -name '*.sh' -print0 | xargs -0 shellcheck -e SC1091,SC2086 || true
+      - name: Run assertions library self-test (gating)
+        run: bash scenarios/lib/assertions.test.sh
+
+  pester:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module Pester -Force -SkipPublisherCheck -Scope CurrentUser
+      - name: Run Scancode tests
+        shell: pwsh
+        run: |
+          Invoke-Pester host/tests/Scancode.Tests.ps1 -Output Detailed -CI
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install ruff + mypy
+        run: pip install ruff mypy
+      - name: Lint client-app
+        run: |
+          cd client-app
+          ruff check pgha_client tests
+      - name: Type-check client-app
+        run: |
+          cd client-app
+          pip install -e .
+          mypy --strict pgha_client || true
+
+  encoding-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no BOM and correct EOL
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path('.')
+          ps_exts = {'.ps1', '.psm1', '.psd1'}
+          bad = []
+          for p in root.rglob('*'):
+              if not p.is_file(): continue
+              if any(part.startswith('.') for part in p.parts): continue
+              try:
+                  b = p.read_bytes()
+              except Exception:
+                  continue
+              if b.startswith(b'\xef\xbb\xbf'):
+                  bad.append(f'BOM: {p}')
+              has_crlf = b'\r\n' in b
+              if p.suffix.lower() in ps_exts:
+                  if has_crlf is False and len(b.splitlines()) > 1:
+                      bad.append(f'expected CRLF: {p}')
+              else:
+                  if has_crlf and p.suffix.lower() not in {'.html'}:
+                      bad.append(f'unexpected CRLF: {p}')
+          for x in bad: print(x)
+          sys.exit(1 if bad else 0)
+          PY

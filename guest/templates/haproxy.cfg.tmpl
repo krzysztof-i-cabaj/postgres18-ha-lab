@@ -1,0 +1,42 @@
+global
+    maxconn 1000
+    log /dev/log local0
+    daemon
+
+defaults
+    log     global
+    mode    tcp
+    retries 2
+    timeout client 30m
+    timeout connect 4s
+    timeout server 30m
+    timeout check 5s
+
+listen stats
+    mode http
+    bind *:7000
+    stats enable
+    stats uri /
+    stats refresh 10s
+    stats show-legends
+
+# Primary writes — Patroni REST returns HTTP 200 only on the leader
+listen postgres_primary
+    bind *:5000
+    option httpchk GET /primary
+    http-check expect status 200
+    default-server inter 5s fall 2 rise 1 on-marked-down shutdown-sessions
+    server pg1 192.168.56.11:5432 check port 8008
+    server pg2 192.168.56.12:5432 check port 8008
+    server pg3 192.168.56.13:5432 check port 8008
+
+# Read-only — replicas (Patroni /replica returns 200 on standbys)
+listen postgres_replicas
+    bind *:5001
+    option httpchk GET /replica
+    http-check expect status 200
+    balance roundrobin
+    default-server inter 5s fall 2 rise 1 on-marked-down shutdown-sessions
+    server pg1 192.168.56.11:5432 check port 8008
+    server pg2 192.168.56.12:5432 check port 8008
+    server pg3 192.168.56.13:5432 check port 8008

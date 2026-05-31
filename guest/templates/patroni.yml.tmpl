@@ -1,0 +1,80 @@
+scope: @@SCOPE@@
+namespace: /service/
+name: @@HOSTNAME@@
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: @@IP@@:8008
+
+etcd3:
+  hosts:
+    - 192.168.56.11:2379
+    - 192.168.56.12:2379
+    - 192.168.56.13:2379
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    synchronous_mode_strict: false
+    synchronous_node_count: 1
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        wal_keep_size: 1024MB
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_log_hints: "on"
+        archive_mode: "on"
+        archive_command: "/bin/true"
+        listen_addresses: "*"
+        max_connections: 200
+        shared_buffers: 1GB
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+  pg_hba:
+    - host  replication  replicator  192.168.56.0/24  md5
+    - host  all          all         192.168.56.0/24  md5
+    - local all          all                          peer
+
+  users:
+    @@APP_USER@@:
+      password: "@@APP_PASSWORD@@"
+      options:
+        - LOGIN
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: @@IP@@:5432
+  data_dir: /var/lib/pgsql/18/data
+  bin_dir: /usr/pgsql-18/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    replication:
+      username: replicator
+      password: "@@REPL_PWD@@"
+    superuser:
+      username: postgres
+      password: "@@SUPER_PWD@@"
+    rewind:
+      username: rewind_user
+      password: "@@REWIND_PWD@@"
+
+watchdog:
+  mode: @@WATCHDOG_MODE@@
+  device: /dev/watchdog
+  safety_margin: 5
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
